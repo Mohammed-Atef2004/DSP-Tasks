@@ -20,6 +20,14 @@ class Signal:
         """Return data suitable for matplotlib plotting"""
         return self.indices, self.samples
 
+    def get_time_series(self, fs: float) -> Tuple[np.ndarray, np.ndarray]:
+        """Return time vector and samples sampled at rate fs for continuous plotting convenience."""
+        if not self.indices:
+            return np.array([]), np.array([])
+        n = np.array(self.indices)
+        t = n / fs
+        y = np.array(self.samples)
+        return t, y
 
 class DSPApplication:
     def __init__(self, root):
@@ -45,6 +53,15 @@ class DSPApplication:
             self.style.theme_use('clam')
         except Exception:
             pass
+
+        # Add menu bar for signal generation
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+
+        signal_gen_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='Signal Generation', menu=signal_gen_menu)
+        signal_gen_menu.add_command(label='Sine Wave', command=lambda: self.open_generate_dialog('sine'))
+        signal_gen_menu.add_command(label='Cosine Wave', command=lambda: self.open_generate_dialog('cosine'))
 
         # Define color styles - each operation gets its own TButton style
         self.style.configure('Load.TButton', foreground='white', background='#1e88e5', font=('Segoe UI', 10, 'bold'), padding=6)
@@ -85,8 +102,29 @@ class DSPApplication:
         plot_frame = ttk.Frame(self.root, padding="8")
         plot_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        control_frame = ttk.Frame(self.root, padding="8", width=320, relief='flat')
-        control_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        # ---- Scrollable Control Panel ----
+        control_container = ttk.Frame(self.root)
+        control_container.pack(side=tk.RIGHT, fill=tk.Y)
+
+        canvas = tk.Canvas(control_container, width=360)
+        scrollbar = ttk.Scrollbar(control_container, orient="vertical", command=canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        control_frame = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=control_frame, anchor="nw")
+
+        def _on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        control_frame.bind("<Configure>", _on_frame_configure)
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
         # Signal management section
         mgmt_frame = ttk.LabelFrame(control_frame, text="Signal Management", padding="6")
@@ -130,6 +168,24 @@ class DSPApplication:
                    command=self.fold_signal).pack(fill=tk.X, pady=6)
         ttk.Button(ops_frame, text="Plot Selected", style='Plot.TButton',
                    command=self.plot_selected).pack(fill=tk.X, pady=6)
+        ttk.Button(ops_frame, text="Plot Two Signals", style='Plot.TButton',
+           command=self.plot_two_selected).pack(fill=tk.X, pady=6)
+        
+        # Display options (discrete or continuous)
+        disp_frame = ttk.LabelFrame(control_frame, text="Display Options", padding=6)
+        disp_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
+
+        self.display_mode = tk.StringVar(value='discrete')
+        self.fs_for_time_plot = tk.DoubleVar(value=100.0)
+
+        ttk.Radiobutton(disp_frame, text="Discrete", variable=self.display_mode, value='discrete').pack(anchor=tk.W)
+        ttk.Radiobutton(disp_frame, text="Continuous", variable=self.display_mode, value='continuous').pack(anchor=tk.W)
+
+        fs_frame = ttk.Frame(disp_frame)
+        fs_frame.pack(fill=tk.X, pady=6)
+        ttk.Label(fs_frame, text="Time-plot fs (Hz):").pack(side=tk.LEFT)
+        self.fs_entry = ttk.Entry(fs_frame, width=8, textvariable=self.fs_for_time_plot)
+        self.fs_entry.pack(side=tk.LEFT, padx=6)
 
         result_frame = ttk.LabelFrame(control_frame, text="Results", padding="6")
         result_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
@@ -341,7 +397,6 @@ class DSPApplication:
             messagebox.showerror("Error", f"Folding failed: {str(e)}")
 
     def plot_selected(self):
-        """Plot selected signals"""
         selected_signals = self.get_selected_signals()
 
         if not selected_signals:
@@ -349,18 +404,56 @@ class DSPApplication:
             return
 
         self.ax.clear()
+        mode = self.display_mode.get()
+        fs_time = float(self.fs_entry.get()) if self.fs_entry.get() else float(self.fs_for_time_plot.get())
 
         for signal in selected_signals:
-            indices, samples = signal.get_plot_data()
-            self.ax.stem(indices, samples, linefmt='-', markerfmt='o',
-                         basefmt=' ', label=signal.name)
+            if mode == 'discrete':
+                indices, samples = signal.get_plot_data()
+                if indices and samples:
+                    self.ax.stem(indices, samples, linefmt='-', markerfmt='o', basefmt=' ', label=signal.name)
+            else:
+                t_samples, y_samples = signal.get_time_series(fs_time)
+                if t_samples.size == 0:
+                    continue
+                t_dense = np.linspace(t_samples.min(), t_samples.max(), max(200, len(t_samples) * 10))
+                y_dense = np.interp(t_dense, t_samples, y_samples)
+                self.ax.plot(t_dense, y_dense, '-', label=signal.name)
 
         self.ax.grid(True, alpha=0.3)
-        self.ax.set_xlabel('Index (n)')
+        self.ax.set_xlabel('n (discrete) or t (s)')
         self.ax.set_ylabel('Amplitude')
         self.ax.set_title('Signal Visualization')
         self.ax.legend()
+        self.canvas.draw()
 
+    def plot_two_selected(self):
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) < 2:
+            messagebox.showwarning("Warning", "Please select at least two signals to plot together")
+            return
+        self.ax.clear()
+        mode = self.display_mode.get()
+        fs_time = float(self.fs_entry.get()) if self.fs_entry.get() else float(self.fs_for_time_plot.get())
+
+        for signal in selected_signals[:2]:
+            if mode == 'discrete':
+                indices, samples = signal.get_plot_data()
+                if indices and samples:
+                    self.ax.stem(indices, samples, linefmt='-', markerfmt='o', basefmt=' ', label=signal.name)
+            else:
+                t_samples, y_samples = signal.get_time_series(fs_time)
+                if t_samples.size == 0:
+                    continue
+                t_dense = np.linspace(t_samples.min(), t_samples.max(), max(200, len(t_samples) * 10))
+                y_dense = np.interp(t_dense, t_samples, y_samples)
+                self.ax.plot(t_dense, y_dense, '-', label=signal.name)
+
+        self.ax.grid(True, alpha=0.3)
+        self.ax.set_xlabel('n (discrete) or t (s)')
+        self.ax.set_ylabel('Amplitude')
+        self.ax.set_title('Two Signals')
+        self.ax.legend()
         self.canvas.draw()
 
     def plot_result(self):
@@ -430,6 +523,77 @@ class DSPApplication:
         self.signals_listbox.delete(0, tk.END)
         self.clear_result()
         messagebox.showinfo("Info", "All signals cleared")
+
+    def open_generate_dialog(self, wave_type: str = 'sine'):
+        """Open a dialog to generate sine/cosine signals.
+
+        Parameters asked:
+          - amplitude A
+          - phase theta (degrees)
+          - analog frequency f (Hz)
+          - sampling frequency fs (Hz)
+          - duration T (seconds)
+
+        Enforce Nyquist: fs > 2 * f
+        """
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f'Generate {wave_type.title()} Wave')
+        dlg.grab_set()
+
+        entries = {}
+
+        def add_row(parent, label_text, default):
+            row = ttk.Frame(parent)
+            row.pack(fill=tk.X, pady=4, padx=6)
+            ttk.Label(row, text=label_text).pack(side=tk.LEFT)
+            ent = ttk.Entry(row)
+            ent.pack(side=tk.LEFT, padx=6)
+            ent.insert(0, str(default))
+            return ent
+
+        entries['A'] = add_row(dlg, 'Amplitude (A):', 1.0)
+        entries['theta'] = add_row(dlg, 'Phase (degrees):', 0.0)
+        entries['f'] = add_row(dlg, 'Analog frequency f (Hz):', 5.0)
+        entries['fs'] = add_row(dlg, 'Sampling frequency fs (Hz):', 50.0)
+        entries['T'] = add_row(dlg, 'Duration T (seconds):', 1.0)
+
+        def generate_and_close():
+            try:
+                A = float(entries['A'].get())
+                theta_deg = float(entries['theta'].get())
+                f = float(entries['f'].get())
+                fs = float(entries['fs'].get())
+                T = float(entries['T'].get())
+
+                if fs <= 2 * f:
+                    # Nyquist violation
+                    if not messagebox.askyesno('Nyquist Warning', f'Chosen sampling frequency fs = {fs} Hz does not satisfy Nyquist (fs > 2*f = {2*f} Hz).\n\nDo you want to continue anyway?'):
+                        return
+
+                # generate samples as discrete-time signal: n = 0..N-1, x[n] = A * sin(2*pi*f*(n/fs)+theta)
+                N = max(1, int(np.ceil(T * fs)))
+                n = np.arange(N)
+                theta = np.deg2rad(theta_deg)
+                if wave_type == 'sine':
+                    x = A * np.sin(2 * np.pi * f * (n / fs) + theta)
+                else:
+                    x = A * np.cos(2 * np.pi * f * (n / fs) + theta)
+
+                indices = n.tolist()
+                samples = x.tolist()
+                name = f"{wave_type}_{A}A_{f}Hz_fs{fs}Hz_T{T}s"
+                sig = Signal(indices, samples, name)
+                self.signals.append(sig)
+                self.signals_listbox.insert(tk.END, f"{name} ({len(indices)} samples)")
+
+                dlg.destroy()
+                messagebox.showinfo('Success', f'{wave_type.title()} signal generated: {N} samples')
+
+            except Exception as e:
+                messagebox.showerror('Error', f'Invalid input: {e}')
+
+        btn = ttk.Button(dlg, text='Generate', command=generate_and_close)
+        btn.pack(pady=8)
 
 
 def main():

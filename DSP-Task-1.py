@@ -108,23 +108,23 @@ class DSPApplication:
 
         canvas = tk.Canvas(control_container, width=360)
         scrollbar = ttk.Scrollbar(control_container, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        control_frame = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=control_frame, anchor="nw")
 
-        control_frame = scrollable_frame  # use this instead of plain frame below
+        def _on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
 
+        control_frame.bind("<Configure>", _on_frame_configure)
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
         # Signal management section
         mgmt_frame = ttk.LabelFrame(control_frame, text="Signal Management", padding="6")

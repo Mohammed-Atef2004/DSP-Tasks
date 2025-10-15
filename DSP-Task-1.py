@@ -102,8 +102,29 @@ class DSPApplication:
         plot_frame = ttk.Frame(self.root, padding="8")
         plot_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        control_frame = ttk.Frame(self.root, padding="8", width=320, relief='flat')
-        control_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        # ---- Scrollable Control Panel ----
+        control_container = ttk.Frame(self.root)
+        control_container.pack(side=tk.RIGHT, fill=tk.Y)
+
+        canvas = tk.Canvas(control_container, width=360)
+        scrollbar = ttk.Scrollbar(control_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        control_frame = scrollable_frame  # use this instead of plain frame below
+
 
         # Signal management section
         mgmt_frame = ttk.LabelFrame(control_frame, text="Signal Management", padding="6")

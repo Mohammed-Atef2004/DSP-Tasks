@@ -202,14 +202,12 @@ class DSPApplication:
         self.canvas = FigureCanvasTkAgg(self.fig, parent)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # nicer default appearance for plots
         self.ax.grid(True, alpha=0.3)
         self.ax.set_xlabel('Index (n)')
         self.ax.set_ylabel('Amplitude')
         self.ax.set_title('Signal Visualization')
 
     def read_signal_file(self, filename):
-        """Read signal from file in the specified format"""
         try:
             with open(filename, 'r') as f:
                 f.readline()
@@ -239,7 +237,6 @@ class DSPApplication:
             raise ValueError(f"Error reading file: {str(e)}")
 
     def load_signal(self):
-        """Load a signal from file"""
         filename = filedialog.askopenfilename(
             title="Select Signal File",
             filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
@@ -267,7 +264,6 @@ class DSPApplication:
         return [self.signals[i] for i in selected_indices]
 
     def add_signals(self):
-        """Add selected signals"""
         selected_signals = self.get_selected_signals()
 
         if len(selected_signals) < 2:
@@ -525,17 +521,6 @@ class DSPApplication:
         messagebox.showinfo("Info", "All signals cleared")
 
     def open_generate_dialog(self, wave_type: str = 'sine'):
-        """Open a dialog to generate sine/cosine signals.
-
-        Parameters asked:
-          - amplitude A
-          - phase theta (degrees)
-          - analog frequency f (Hz)
-          - sampling frequency fs (Hz)
-          - duration T (seconds)
-
-        Enforce Nyquist: fs > 2 * f
-        """
         dlg = tk.Toplevel(self.root)
         dlg.title(f'Generate {wave_type.title()} Wave')
         dlg.grab_set()
@@ -566,11 +551,9 @@ class DSPApplication:
                 T = float(entries['T'].get())
 
                 if fs <= 2 * f:
-                    # Nyquist violation
                     if not messagebox.askyesno('Nyquist Warning', f'Chosen sampling frequency fs = {fs} Hz does not satisfy Nyquist (fs > 2*f = {2*f} Hz).\n\nDo you want to continue anyway?'):
                         return
 
-                # generate samples as discrete-time signal: n = 0..N-1, x[n] = A * sin(2*pi*f*(n/fs)+theta)
                 N = max(1, int(np.ceil(T * fs)))
                 n = np.arange(N)
                 theta = np.deg2rad(theta_deg)

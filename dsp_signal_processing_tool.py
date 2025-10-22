@@ -664,3 +664,19 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+### TESTS
+
+def quantize_samples(samples, L):
+    samples = np.array(samples, dtype=float)
+    x_min, x_max = samples.min(), samples.max()
+    if x_min == x_max:
+        quantized = np.full_like(samples, x_min)
+        encoded = np.zeros_like(samples, dtype=int)
+        return encoded.tolist(), quantized.tolist()
+
+    delta = (x_max - x_min) / (L - 1)
+    quantized = np.round((samples - x_min) / delta) * delta + x_min
+    quantized = np.clip(quantized, x_min, x_max)
+    encoded = np.round((quantized - x_min) / delta).astype(int)
+    return encoded.tolist(), quantized.tolist()

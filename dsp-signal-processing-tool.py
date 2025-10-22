@@ -166,6 +166,8 @@ class DSPApplication:
 
         ttk.Button(ops_frame, text="Fold Signal", style='Fold.TButton',
                    command=self.fold_signal).pack(fill=tk.X, pady=6)
+        ttk.Button(ops_frame, text="Quantize Signal", style='Multiply.TButton',
+           command=self.quantize_signal).pack(fill=tk.X, pady=6)
         ttk.Button(ops_frame, text="Plot Selected", style='Plot.TButton',
                    command=self.plot_selected).pack(fill=tk.X, pady=6)
         ttk.Button(ops_frame, text="Plot Two Signals", style='Plot.TButton',
@@ -391,6 +393,81 @@ class DSPApplication:
 
         except Exception as e:
             messagebox.showerror("Error", f"Folding failed: {str(e)}")
+
+    def quantize_signal(self):
+        selected_signals = self.get_selected_signals()
+
+        if len(selected_signals) != 1:
+            messagebox.showwarning("Warning", "Please select exactly one signal to quantize")
+            return
+
+        sig = selected_signals[0]
+
+        # user input
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Quantization Parameters")
+        dlg.grab_set()
+
+        ttk.Label(dlg, text="Choose quantization input:").pack(pady=6)
+        choice_var = tk.StringVar(value="levels")
+
+        ttk.Radiobutton(dlg, text="Number of Levels (L)", variable=choice_var, value="levels").pack(anchor=tk.W)
+        ttk.Radiobutton(dlg, text="Number of Bits (b)", variable=choice_var, value="bits").pack(anchor=tk.W)
+
+        val_entry = ttk.Entry(dlg)
+        val_entry.pack(pady=6)
+        val_entry.insert(0, "8")  # default value
+
+        def do_quantize():
+            try:
+                val = int(val_entry.get())
+                if val <= 0:
+                    raise ValueError("Value must be positive")
+
+                if choice_var.get() == "bits":
+                    L = 2 ** val
+                else:
+                    L = val
+
+                samples = np.array(sig.samples, dtype=float)
+
+                x_min, x_max = samples.min(), samples.max()
+                delta = (x_max - x_min) / (L - 1) if L > 1 else 1
+
+                quantized = np.round((samples - x_min) / delta) * delta + x_min
+                quantized = np.clip(quantized, x_min, x_max)
+
+                error = samples - quantized
+
+                encoded = np.round((quantized - x_min) / delta).astype(int)
+
+                # Create and store new signals
+                q_signal = Signal(sig.indices, quantized.tolist(), f"Quantized_{sig.name}")
+                e_signal = Signal(sig.indices, error.tolist(), f"Error_{sig.name}")
+                enc_signal = Signal(sig.indices, encoded.tolist(), f"Encoded_{sig.name}")
+
+                self.signals.extend([q_signal, e_signal, enc_signal])
+
+                self.signals_listbox.insert(tk.END, f"{q_signal.name} ({len(q_signal.indices)} samples)")
+                self.signals_listbox.insert(tk.END, f"{e_signal.name} ({len(e_signal.indices)} samples)")
+                self.signals_listbox.insert(tk.END, f"{enc_signal.name} ({len(enc_signal.indices)} samples)")
+
+                self.ax.clear()
+                self.ax.stem(sig.indices, samples, linefmt='b-', markerfmt='bo', basefmt=' ', label='Original')
+                self.ax.stem(sig.indices, quantized, linefmt='r-', markerfmt='ro', basefmt=' ', label='Quantized')
+                self.ax.stem(sig.indices, error, linefmt='g-', markerfmt='go', basefmt=' ', label='Error')
+                self.ax.legend()
+                self.ax.grid(True, alpha=0.3)
+                self.ax.set_title(f"Quantization (L={L}, Δ={delta:.3f})")
+                self.canvas.draw()
+
+                dlg.destroy()
+                messagebox.showinfo("Success", f"Quantization complete! Levels={L}, Δ={delta:.3f}")
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Quantization failed: {e}")
+
+        ttk.Button(dlg, text="Quantize", command=do_quantize).pack(pady=8)
 
     def plot_selected(self):
         selected_signals = self.get_selected_signals()

@@ -418,6 +418,14 @@ class DSPApplication:
         val_entry.pack(pady=6)
         val_entry.insert(0, "8")  # default value
 
+        # Add range specification for faculty test compatibility
+        range_frame = ttk.Frame(dlg)
+        range_frame.pack(fill=tk.X, pady=6, padx=6)
+        ttk.Label(range_frame, text="Range (min max):").pack(side=tk.LEFT)
+        range_entry = ttk.Entry(range_frame)
+        range_entry.pack(side=tk.LEFT, padx=6)
+        range_entry.insert(0, "auto")  # Use "0.2 1.0" to match faculty test
+
         def do_quantize():
             try:
                 val = int(val_entry.get())
@@ -431,15 +439,40 @@ class DSPApplication:
 
                 samples = np.array(sig.samples, dtype=float)
 
-                x_min, x_max = samples.min(), samples.max()
-                delta = (x_max - x_min) / (L - 1) if L > 1 else 1
+                # Handle range specification
+                range_text = range_entry.get().strip()
+                if range_text.lower() == "auto":
+                    x_min, x_max = samples.min(), samples.max()
+                else:
+                    range_parts = range_text.split()
+                    if len(range_parts) == 2:
+                        x_min, x_max = float(range_parts[0]), float(range_parts[1])
+                    else:
+                        x_min, x_max = samples.min(), samples.max()
 
-                quantized = np.round((samples - x_min) / delta) * delta + x_min
-                quantized = np.clip(quantized, x_min, x_max)
+                # FIXED: Calculate delta and quantization levels correctly
+                delta = (x_max - x_min) / L  # Note: divided by L, not (L-1)
+                
+                # Create quantization levels (midpoints of each interval)
+                levels = []
+                for i in range(L):
+                    level = x_min + (i + 0.5) * delta
+                    levels.append(level)
+                
+                levels = np.array(levels)
+                
+                # Quantize each sample to the nearest level
+                quantized = np.zeros_like(samples)
+                encoded = np.zeros_like(samples, dtype=int)
+                
+                for i, sample in enumerate(samples):
+                    # Find the closest quantization level
+                    differences = np.abs(sample - levels)
+                    closest_idx = np.argmin(differences)
+                    quantized[i] = levels[closest_idx]
+                    encoded[i] = closest_idx
 
                 error = samples - quantized
-
-                encoded = np.round((quantized - x_min) / delta).astype(int)
 
                 # Create and store new signals
                 q_signal = Signal(sig.indices, quantized.tolist(), f"Quantized_{sig.name}")
@@ -468,6 +501,7 @@ class DSPApplication:
                 messagebox.showerror("Error", f"Quantization failed: {e}")
 
         ttk.Button(dlg, text="Quantize", command=do_quantize).pack(pady=8)
+
 
     def plot_selected(self):
         selected_signals = self.get_selected_signals()

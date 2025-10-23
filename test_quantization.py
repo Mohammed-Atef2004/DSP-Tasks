@@ -1,6 +1,7 @@
 import numpy as np
 from dsp_signal_processing_tool import Signal
 from QuanTest1 import QuantizationTest1
+from QuanTest2 import QuantizationTest2
 
 def read_input_file(filename):
     try:
@@ -26,23 +27,50 @@ def read_input_file(filename):
         print(f"Error reading file {filename}: {str(e)}")
         return [], []
 
-def quantize_samples_fixed(samples, L, x_min=0.2, x_max=1.0):
-    """
-    Fixed quantization that matches faculty's expected output
-    """
+def read_expected_output_2(filename):
+    """Read expected output for test 2 to understand the indices"""
+    expectedIntervalIndices = []
+    expectedEncodedValues = []
+    expectedQuantizedValues = []
+    expectedSampledError = []
+    
+    with open(filename, 'r') as f:
+        # Skip header
+        for _ in range(3):
+            f.readline()
+        
+        # Read data
+        while True:
+            line = f.readline().strip()
+            if not line:
+                break
+            parts = line.split()
+            if len(parts) == 4:
+                expectedIntervalIndices.append(int(parts[0]))
+                expectedEncodedValues.append(parts[1])
+                expectedQuantizedValues.append(float(parts[2]))
+                expectedSampledError.append(float(parts[3]))
+    
+    print("=== Expected Output for Test 2 ===")
+    print(f"Expected indices: {expectedIntervalIndices}")
+    print(f"Expected encoded: {expectedEncodedValues}")
+    print(f"Expected quantized: {expectedQuantizedValues}")
+    print(f"Expected error: {expectedSampledError}")
+    
+    return expectedIntervalIndices, expectedEncodedValues, expectedQuantizedValues, expectedSampledError
+
+def quantize_samples(samples, L, x_min=None, x_max=None):
+    """Generic quantization function that matches faculty's algorithm"""
     samples = np.array(samples, dtype=float)
     
-    # Use the range that matches faculty test
+    if x_min is None:
+        x_min = min(samples)
+    if x_max is None:
+        x_max = max(samples)
+    
     delta = (x_max - x_min) / L
-    
-    print(f"Quantization parameters: min={x_min}, max={x_max}, delta={delta}, L={L}")
-    
-    # Create quantization levels (midpoints)
     levels = x_min + (np.arange(L) + 0.5) * delta
     
-    print(f"Quantization levels: {levels}")
-    
-    # Quantize each sample to nearest level
     quantized = np.zeros_like(samples)
     encoded = np.zeros_like(samples, dtype=int)
     
@@ -54,65 +82,54 @@ def quantize_samples_fixed(samples, L, x_min=0.2, x_max=1.0):
     
     return quantized, encoded
 
-def debug_faculty_output():
-    """Debug what the faculty's expected output actually contains"""
-    expectedEncodedValues = []
-    expectedQuantizedValues = []
+def test_quantization_1():
+    """Test 1: 3-bit quantization with fixed range 0.2-1.0"""
+    print("=== Running Quantization Test 1 ===")
     
-    with open("Quan1_Out.txt", 'r') as f:
-        line = f.readline()  # first 0
-        line = f.readline()  # second 0  
-        line = f.readline()  # 11
-        line = f.readline()  # first data line
-        
-        while line and line.strip():
-            L = line.strip()
-            if len(L.split(' ')) == 2:
-                parts = L.split(' ')
-                encoded = str(parts[0])
-                quantized = float(parts[1])
-                expectedEncodedValues.append(encoded)
-                expectedQuantizedValues.append(quantized)
-            line = f.readline()
+    indices, samples = read_input_file("Quan1_input.txt")
+    print(f"Test 1 - Input samples: {samples}")
     
-    print("Expected encoded values:", expectedEncodedValues)
-    print("Expected quantized values:", expectedQuantizedValues)
-    print("Length of expected encoded:", len(expectedEncodedValues))
-    print("Length of expected quantized:", len(expectedQuantizedValues))
-    return expectedEncodedValues, expectedQuantizedValues
+    L = 8  # 3-bit quantization
+    x_min, x_max = 0.2, 1.0  # Fixed range for test 1
+    
+    quantized, encoded = quantize_samples(samples, L, x_min, x_max)
+    your_encoded_str = [format(code, '03b') for code in encoded]
+    
+    print(f"Test 1 - Your encoded: {your_encoded_str}")
+    print(f"Test 1 - Your quantized: {quantized.tolist()}")
+    
+    QuantizationTest1("Quan1_Out.txt", your_encoded_str, quantized.tolist())
 
-def test_quantization_with_faculty_files():
-    # Debug faculty output first
-    expected_encoded, expected_quantized = debug_faculty_output()
+def test_quantization_2():
+    """Test 2: 2-bit quantization with auto range"""
+    print("\n=== Running Quantization Test 2 ===")
     
-    # Read input signal
-    input_file = "Quan1_input.txt"
-    indices, samples = read_input_file(input_file)
+    # Read input and expected output to understand the indices
+    indices, samples = read_input_file("Quan2_input.txt")
+    exp_indices, exp_encoded, exp_quantized, exp_error = read_expected_output_2("Quan2_Out.txt")
     
-    if not samples:
-        print("Failed to read input file")
-        return
+    print(f"Test 2 - Input indices: {indices}")
+    print(f"Test 2 - Input samples: {samples}")
     
-    print("Input samples:", samples)
+    L = 4  # 2-bit quantization
+    # Auto range for test 2 - calculate from data
+    x_min, x_max = min(samples), max(samples)
     
-    # Use 3-bit quantization (8 levels) with faculty's range
-    bits = 3
-    L = 2 ** bits  # 8 levels
+    quantized, encoded = quantize_samples(samples, L, x_min, x_max)
     
-    # Perform quantization using fixed function
-    quantized_samples, encoded_values = quantize_samples_fixed(np.array(samples), L)
+    # FIX: Calculate error as Quantized - Original (not Original - Quantized)
+    error = quantized - np.array(samples)  # This is the key fix!
     
-    print("Encoded values (indices):", encoded_values)
-    print("Quantized samples:", quantized_samples)
+    your_encoded_str = [format(code, '02b') for code in encoded]
     
-    # Convert encoded values to 3-bit binary strings
-    your_encoded_str = [format(code, '03b') for code in encoded_values]
+    print(f"Test 2 - Your indices: {indices}")
+    print(f"Test 2 - Your encoded: {your_encoded_str}")
+    print(f"Test 2 - Your quantized: {quantized.tolist()}")
+    print(f"Test 2 - Your error (fixed): {error.tolist()}")
     
-    print("Your encoded strings:", your_encoded_str)
-    print("Your quantized values:", quantized_samples.tolist())
-    
-    # Test against faculty's expected output
-    QuantizationTest1("Quan1_Out.txt", your_encoded_str, quantized_samples.tolist())
+    # Use the expected indices instead of the input indices
+    QuantizationTest2("Quan2_Out.txt", exp_indices, your_encoded_str, quantized.tolist(), error.tolist())
 
 if __name__ == "__main__":
-    test_quantization_with_faculty_files()
+    test_quantization_1()
+    test_quantization_2()

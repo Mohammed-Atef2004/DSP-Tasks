@@ -95,8 +95,8 @@ def test_quantization_1():
     quantized, encoded = quantize_samples(samples, L, x_min, x_max)
     your_encoded_str = [format(code, '03b') for code in encoded]
     
-    print(f"Test 1 - Your encoded: {your_encoded_str}")
-    print(f"Test 1 - Your quantized: {quantized.tolist()}")
+    print(f"Test 1 - My encoded: {your_encoded_str}")
+    print(f"Test 1 - My quantized: {quantized.tolist()}")
     
     QuantizationTest1("Quan1_Out.txt", your_encoded_str, quantized.tolist())
 
@@ -122,10 +122,10 @@ def test_quantization_2():
     
     your_encoded_str = [format(code, '02b') for code in encoded]
     
-    print(f"Test 2 - Your indices: {indices}")
-    print(f"Test 2 - Your encoded: {your_encoded_str}")
-    print(f"Test 2 - Your quantized: {quantized.tolist()}")
-    print(f"Test 2 - Your error (fixed): {error.tolist()}")
+    print(f"Test 2 - My indices: {indices}")
+    print(f"Test 2 - My encoded: {your_encoded_str}")
+    print(f"Test 2 - My quantized: {quantized.tolist()}")
+    print(f"Test 2 - My error (fixed): {error.tolist()}")
     
     # Use the expected indices instead of the input indices
     QuantizationTest2("Quan2_Out.txt", exp_indices, your_encoded_str, quantized.tolist(), error.tolist())

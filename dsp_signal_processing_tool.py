@@ -450,10 +450,8 @@ class DSPApplication:
                     else:
                         x_min, x_max = samples.min(), samples.max()
 
-                # FIXED: Calculate delta and quantization levels correctly
-                delta = (x_max - x_min) / L  # Note: divided by L, not (L-1)
+                delta = (x_max - x_min) / L 
                 
-                # Create quantization levels (midpoints of each interval)
                 levels = []
                 for i in range(L):
                     level = x_min + (i + 0.5) * delta
@@ -461,12 +459,10 @@ class DSPApplication:
                 
                 levels = np.array(levels)
                 
-                # Quantize each sample to the nearest level
                 quantized = np.zeros_like(samples)
                 encoded = np.zeros_like(samples, dtype=int)
                 
                 for i, sample in enumerate(samples):
-                    # Find the closest quantization level
                     differences = np.abs(sample - levels)
                     closest_idx = np.argmin(differences)
                     quantized[i] = levels[closest_idx]
@@ -474,7 +470,6 @@ class DSPApplication:
 
                 error = samples - quantized
 
-                # Create and store new signals
                 q_signal = Signal(sig.indices, quantized.tolist(), f"Quantized_{sig.name}")
                 e_signal = Signal(sig.indices, error.tolist(), f"Error_{sig.name}")
                 enc_signal = Signal(sig.indices, encoded.tolist(), f"Encoded_{sig.name}")

@@ -19,7 +19,9 @@ def setup_styles(style):
         'Derivative.TButton': ('#5e35b1', '#4527a0'),
         'Convolution.TButton': ('#00897b', '#00695c'),
         'MovingAvg.TButton': ('#f57c00', '#e65100'),
-        'Compare.TButton': ('#546e7a', '#37474f')
+        'Compare.TButton': ('#546e7a', '#37474f'),
+        'Fourier.TButton': ('#8e44ad', '#732d91'),
+        'IDFT.TButton': ('#16a085', '#138d75'),
     }
 
     for style_name, (bg_color, active_bg) in styles_config.items():

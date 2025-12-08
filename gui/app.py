@@ -9,6 +9,7 @@ import numpy as np
 from dsp_signal.signal import Signal
 from dsp_signal.file_io import ReadSignalFile
 from dsp_signal.operations import derivative_signal, convolve_signals, moving_average_signal
+from dsp_signal.fourier import fourier_transform_signal, inverse_fourier_transform
 from utils.comparison import compare_signals
 from gui.styles import setup_styles
 
@@ -159,6 +160,30 @@ class DSPApplication:
         compare_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
         ttk.Button(compare_frame, text="Compare with File", style='Compare.TButton',
                    command=self.compare_with_file).pack(fill=tk.X, pady=6)
+        
+        # Fourier Transform Operations
+        fourier_frame = ttk.LabelFrame(control_frame, text="Fourier Transform", padding="6")
+        fourier_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
+
+        # Sampling frequency input
+        fs_frame = ttk.Frame(fourier_frame)
+        fs_frame.pack(fill=tk.X, pady=6, padx=4)
+        ttk.Label(fs_frame, text="Sampling Freq (Hz):").pack(side=tk.LEFT)
+        self.fs_fourier_entry = ttk.Entry(fs_frame, width=10)
+        self.fs_fourier_entry.pack(side=tk.LEFT, padx=6)
+        self.fs_fourier_entry.insert(0, "100.0")
+
+        # DFT Button
+        ttk.Button(fourier_frame, text="Compute DFT", style='Derivative.TButton',
+                command=self.compute_dft).pack(fill=tk.X, pady=6)
+
+        # IDFT Button
+        ttk.Button(fourier_frame, text="Reconstruct (IDFT)", style='Convolution.TButton',
+                command=self.compute_idft).pack(fill=tk.X, pady=6)
+
+        # Store Fourier results
+        self.magnitude_signal = None
+        self.phase_signal = None
 
         # Display options
         disp_frame = ttk.LabelFrame(control_frame, text="Display Options", padding=6)
@@ -425,7 +450,145 @@ class DSPApplication:
         if len(selected_signals) != 1:
             messagebox.showwarning("Warning", "Please select exactly one signal to quantize")
             return
-        # ... (keep existing quantize_signal implementation)
+    
+    def compute_dft(self):
+        """Compute Discrete Fourier Transform of selected signal"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 1:
+            messagebox.showwarning("Warning", "Please select exactly one signal for DFT")
+            return
+        
+        try:
+            # Get sampling frequency
+            sampling_freq = float(self.fs_fourier_entry.get())
+            if sampling_freq <= 0:
+                raise ValueError("Sampling frequency must be positive")
+            
+            signal = selected_signals[0]
+            
+            # Compute Fourier Transform
+            self.magnitude_signal, self.phase_signal = fourier_transform_signal(signal, sampling_freq)
+            
+            # Plot magnitude and phase
+            self.plot_fourier_results()
+            
+            messagebox.showinfo("Success", 
+                              f"DFT computed successfully!\n"
+                              f"Sampling Frequency: {sampling_freq} Hz\n"
+                              f"Nyquist Frequency: {sampling_freq/2:.2f} Hz")
+            
+        except ValueError as ve:
+            messagebox.showerror("Error", f"Invalid input: {str(ve)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"DFT computation failed: {str(e)}")
+
+    def compute_idft(self):
+        """Reconstruct signal using Inverse DFT"""
+        if self.magnitude_signal is None:
+            messagebox.showwarning("Warning", "No Fourier transform results available.\nPlease compute DFT first.")
+            return
+        
+        try:
+            # Reconstruct signal from magnitude (and phase if available)
+            reconstructed_signal = inverse_fourier_transform(
+                self.magnitude_signal, 
+                self.phase_signal
+            )
+            
+            self.result_signal = reconstructed_signal
+            self.plot_result()
+            
+            # Compare with original if available
+            selected_signals = self.get_selected_signals()
+            if selected_signals:
+                original = selected_signals[0]
+                # Calculate reconstruction error
+                if len(original.samples) == len(reconstructed_signal.samples):
+                    error = np.sqrt(np.mean((
+                        np.array(original.samples[:len(reconstructed_signal.samples)]) - 
+                        np.array(reconstructed_signal.samples)
+                    )**2))
+                    messagebox.showinfo("Success", 
+                                      f"Signal reconstructed successfully!\n"
+                                      f"Reconstruction RMSE: {error:.6f}")
+                else:
+                    messagebox.showinfo("Success", "Signal reconstructed successfully!")
+            else:
+                messagebox.showinfo("Success", "Signal reconstructed successfully!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"IDFT computation failed: {str(e)}")
+
+    def plot_fourier_results(self):
+        """Plot magnitude and phase spectra"""
+        if self.magnitude_signal is None:
+            return
+        
+        # Create a new figure with subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+        
+        # Plot magnitude spectrum
+        indices_mag, samples_mag = self.magnitude_signal.get_plot_data()
+        ax1.stem(indices_mag, samples_mag, linefmt='b-', markerfmt='bo', basefmt=' ')
+        ax1.set_xlabel('Frequency Bin (k)')
+        ax1.set_ylabel('Magnitude')
+        ax1.set_title(f'Magnitude Spectrum - {self.magnitude_signal.name}')
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot phase spectrum if available
+        if self.phase_signal is not None:
+            indices_phase, samples_phase = self.phase_signal.get_plot_data()
+            ax2.stem(indices_phase, samples_phase, linefmt='r-', markerfmt='ro', basefmt=' ')
+            ax2.set_xlabel('Frequency Bin (k)')
+            ax2.set_ylabel('Phase (degrees)')
+            ax2.set_title(f'Phase Spectrum - {self.phase_signal.name}')
+        else:
+            ax2.text(0.5, 0.5, 'No phase information available', 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=ax2.transAxes)
+            ax2.set_title('Phase Spectrum')
+        
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Show in a separate window
+        plt.show()
+
+    def plot_fourier_single(self):
+        """Plot Fourier results in the main canvas"""
+        if self.magnitude_signal is None:
+            return
+        
+        self.ax.clear()
+        
+        # Plot magnitude
+        indices, samples = self.magnitude_signal.get_plot_data()
+        self.ax.stem(indices, samples, linefmt='b-', markerfmt='bo', basefmt=' ', 
+                    label='Magnitude')
+        
+        # Plot phase on secondary axis if available
+        if self.phase_signal is not None:
+            ax2 = self.ax.twinx()
+            indices_phase, samples_phase = self.phase_signal.get_plot_data()
+            ax2.plot(indices_phase, samples_phase, 'r--', label='Phase (degrees)', alpha=0.7)
+            ax2.set_ylabel('Phase (degrees)', color='r')
+            ax2.tick_params(axis='y', labelcolor='r')
+            
+            # Combine legends
+            lines1, labels1 = self.ax.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            self.ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+        else:
+            self.ax.legend()
+        
+        self.ax.set_xlabel('Frequency Bin (k)')
+        self.ax.set_ylabel('Magnitude', color='b')
+        self.ax.tick_params(axis='y', labelcolor='b')
+        self.ax.set_title('Fourier Transform Results')
+        self.ax.grid(True, alpha=0.3)
+        
+        self.canvas.draw()
 
     def plot_selected(self):
         selected_signals = self.get_selected_signals()

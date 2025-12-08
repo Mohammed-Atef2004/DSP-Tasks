@@ -1,73 +1,16 @@
-#!/usr/bin/env python3
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import matplotlib
+matplotlib.use('TkAgg')  # Force TkAgg backend
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
-from typing import List, Tuple, Dict
 
-
-class Signal:
-    def __init__(self, indices=None, samples=None, name=""):
-        self.indices = indices if indices is not None else []
-        self.samples = samples if samples is not None else []
-        self.name = name
-
-    def __str__(self):
-        return f"Signal '{self.name}': {len(self.indices)} samples"
-
-    def get_plot_data(self):
-        """Return data suitable for matplotlib plotting"""
-        return self.indices, self.samples
-
-    def get_time_series(self, fs: float) -> Tuple[np.ndarray, np.ndarray]:
-        """Return time vector and samples sampled at rate fs for continuous plotting convenience."""
-        if not self.indices:
-            return np.array([]), np.array([])
-        n = np.array(self.indices)
-        t = n / fs
-        y = np.array(self.samples)
-        return t, y
-
-    def to_dict(self) -> Dict[float, float]:
-        """Convert signal to dictionary format for the new functions"""
-        return {float(idx): float(sample) for idx, sample in zip(self.indices, self.samples)}
-
-    @classmethod
-    def from_dict(cls, signal_dict: Dict[float, float], name: str = ""):
-        """Create Signal object from dictionary"""
-        indices = list(signal_dict.keys())
-        samples = list(signal_dict.values())
-        return cls(indices, samples, name)
-
-def ReadSignalFile(file_name):
-    """Read signal from file (compatible with original format)"""
-    try:
-        with open(file_name, 'r') as f:
-            f.readline()  # skip first two lines
-            f.readline()
-            num_samples_line = f.readline().strip()
-            if not num_samples_line:
-                raise ValueError("Invalid file format")
-            num_samples = int(num_samples_line)
-
-            indices = []
-            samples = []
-            for _ in range(num_samples):
-                line = f.readline().strip()
-                if not line:
-                    break
-                parts = line.split()
-                if len(parts) == 2:
-                    indices.append(int(parts[0]))
-                    samples.append(float(parts[1]))
-
-            return indices, samples
-    except Exception as e:
-        raise ValueError(f"Error reading file: {str(e)}")
-
-
-# ==================== MODIFIED DSP APPLICATION ====================
+from dsp_signal.signal import Signal
+from dsp_signal.file_io import ReadSignalFile
+from dsp_signal.operations import derivative_signal, convolve_signals, moving_average_signal
+from utils.comparison import compare_signals
+from gui.styles import setup_styles
 
 class DSPApplication:
     def __init__(self, root):
@@ -93,44 +36,23 @@ class DSPApplication:
         except Exception:
             pass
 
+        # Setup styles
+        self.style = ttk.Style(self.root)
+        setup_styles(self.style)
+        
         # Add menu bar for signal generation
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
+        
         signal_gen_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label='Signal Generation', menu=signal_gen_menu)
         signal_gen_menu.add_command(label='Sine Wave', command=lambda: self.open_generate_dialog('sine'))
         signal_gen_menu.add_command(label='Cosine Wave', command=lambda: self.open_generate_dialog('cosine'))
 
-        # Define color styles
-        self.setup_button_styles()
-
         # build UI
         self.setup_gui()
 
-    def setup_button_styles(self):
-        """Setup button styles for different operations"""
-        styles_config = {
-            'Load.TButton': ('#1e88e5', '#1565c0'),
-            'ClearAll.TButton': ('#e53935', '#b71c1c'),
-            'Add.TButton': ('#43a047', '#2e7d32'),
-            'Subtract.TButton': ('#fb8c00', '#ef6c00'),
-            'Multiply.TButton': ('#8e24aa', '#6a1b9a'),
-            'Shift.TButton': ('#00acc1', '#00838f'),
-            'Fold.TButton': ('#6d6e71', '#424242'),
-            'Plot.TButton': ('#1565c0', '#0d47a1'),
-            'Save.TButton': ('#7cb342', '#558b2f'),
-            'ClearResult.TButton': ('#ef5350', '#e53935'),
-            'Derivative.TButton': ('#5e35b1', '#4527a0'),
-            'Convolution.TButton': ('#00897b', '#00695c'),
-            'MovingAvg.TButton': ('#f57c00', '#e65100'),
-            'Compare.TButton': ('#546e7a', '#37474f')
-        }
-
-        for style_name, (bg_color, active_bg) in styles_config.items():
-            self.style.configure(style_name, foreground='white', background=bg_color,
-                                 font=('Segoe UI', 10, 'bold'), padding=6)
-            self.style.map(style_name, background=[('active', active_bg)])
 
     def setup_gui(self):
         # plot on left, controls on right
@@ -205,7 +127,6 @@ class DSPApplication:
         ttk.Button(ops_frame, text="Quantize Signal", style='Multiply.TButton',
                    command=self.quantize_signal).pack(fill=tk.X, pady=6)
 
-        # NEW DSP OPERATIONS
         dsp_frame = ttk.LabelFrame(control_frame, text="Advanced DSP Operations", padding="6")
         dsp_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
 
@@ -282,9 +203,7 @@ class DSPApplication:
         self.ax.grid(True, alpha=0.3)
         self.ax.set_xlabel('Index (n)')
         self.ax.set_ylabel('Amplitude')
-        self.ax.set_title('Signal Visualization')
-
-    # ==================== NEW DSP OPERATIONS METHODS ====================
+        self.ax.set_title('Signal Visualization')    
 
     def calculate_derivative(self):
         """Calculate derivative of selected signal"""
@@ -379,8 +298,6 @@ class DSPApplication:
 
         except Exception as e:
             messagebox.showerror("Error", f"Comparison failed: {str(e)}")
-
-    # ==================== EXISTING METHODS (keep as is) ====================
 
     def read_signal_file(self, filename):
         # Using the same ReadSignalFile function for consistency
@@ -619,94 +536,3 @@ class DSPApplication:
         self.clear_result()
         messagebox.showinfo("Info", "All signals cleared")
 
-    #def open_generate_dialog(self, wave_type: str = 'sine'):
-
-
-
-# ... (keep existing open_generate_dialog implementation)
-
-
-# ==================== NEW DSP FUNCTIONS ====================
-
-def derivative_signal(signal: Dict[float, float], derivative_level: int):
-    if derivative_level == 1:
-        signal_values = list(signal.values())
-        y_n = {}
-        for n in range(0, len(signal) - 1):
-            y_n[n] = signal_values[n + 1] - signal_values[n]
-        return y_n
-    elif derivative_level == 2:
-        first_derivative = derivative_signal(signal, 1)
-        second_derivative = derivative_signal(first_derivative, 1)
-        return second_derivative
-    else:
-        raise ValueError("Only first and second derivatives are supported.")
-
-
-def convolve_signals(signal: Dict[float, float], h: Dict[float, float]):
-    h_keys = list(h.keys())
-    h_values = list(h.values())
-    signal_keys = list(signal.keys())
-
-    y_start = h_keys[0] + signal_keys[0]
-    y_end = h_keys[-1] + signal_keys[-1]
-    y = {}
-
-    for n in range(int(y_start), int(y_end) + 1):
-        y_n = 0
-        for k in range(len(h)):
-            signal_index = n - h_keys[k]
-            if signal_index in signal_keys:
-                signal_value = signal[signal_index]
-            else:
-                signal_value = 0
-            y_n += h_values[k] * signal_value
-        y[n] = y_n
-    return y
-
-
-def moving_average_signal(signal: Dict[float, float], window_size: int):
-    if window_size <= 0:
-        raise ValueError("Window size must be greater than 0 for moving average.")
-
-    signal_values = list(signal.values())
-    y_n = {}
-
-    for n in range(0, len(signal) - window_size + 1):
-        window = signal_values[n:n + window_size]
-        y_n[n] = sum(window) / window_size
-    return y_n
-
-
-def compare_signals(Your_indices, Your_samples, file_name):
-    """Compare generated signal with expected signal from file"""
-    expected_indices, expected_samples = ReadSignalFile(file_name)
-
-    if (len(expected_samples) != len(Your_samples)) and (len(expected_indices) != len(Your_indices)):
-        print("Test case failed, your signal have different length from the expected one")
-        return False
-
-    for i in range(len(Your_indices)):
-        if Your_indices[i] != expected_indices[i]:
-            print("Test case failed, your signal have different indices from the expected one")
-            return False
-
-    for i in range(len(expected_samples)):
-        if abs(Your_samples[i] - expected_samples[i]) < 0.01:
-            continue
-        else:
-            print("Test case failed, your signal have different values from the expected one")
-            return False
-
-    print("Comparison test case passed successfully")
-    return True
-
-
-def main():
-    root = tk.Tk()
-    app = DSPApplication(root)
-    root.mainloop()
-
-
-if __name__ == "__main__":
-    main()

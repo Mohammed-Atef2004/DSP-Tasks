@@ -120,18 +120,18 @@ print("FINAL RESULTS:")
 print("=" * 60)
 
 if all_match:
-    print("✅ DFT Test: PASSED - Your DFT matches expected results")
+    print("DFT Test: PASSED - Your DFT matches expected results")
 else:
-    print("❌ DFT Test: FAILED - Check DFT implementation")
+    print("DFT Test: FAILED - Check DFT implementation")
 
 if reconstruction_ok:
-    print("✅ IDFT Test: PASSED - Signal reconstructed correctly")
+    print("IDFT Test: PASSED - Signal reconstructed correctly")
 else:
-    print("❌ IDFT Test: FAILED - Check IDFT implementation")
+    print("IDFT Test: FAILED - Check IDFT implementation")
 
 if all_match and reconstruction_ok:
-    print("\n🎉 ALL TESTS PASSED! Your implementation is correct.")
+    print("\nALL TESTS PASSED! Your implementation is correct.")
     sys.exit(0)
 else:
-    print("\n⚠️  Some tests failed. Check implementation.")
+    print("\nSome tests failed. Check implementation.")
     sys.exit(1)

@@ -203,6 +203,32 @@ class DSPApplication:
         self.fs_entry = ttk.Entry(fs_frame, width=8, textvariable=self.fs_for_time_plot)
         self.fs_entry.pack(side=tk.LEFT, padx=6)
 
+        # Correlation Analysis
+        corr_frame = ttk.LabelFrame(control_frame, text="Correlation & Time Analysis", padding="6")
+        corr_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
+
+        # Cross-correlation
+        ttk.Button(corr_frame, text="Cross-Correlation", style='Convolution.TButton',
+                   command=self.compute_correlation).pack(fill=tk.X, pady=6)
+
+        # Auto-correlation
+        ttk.Button(corr_frame, text="Auto-Correlation", style='MovingAvg.TButton',
+                   command=self.compute_autocorrelation).pack(fill=tk.X, pady=6)
+
+        # Time delay estimation
+        delay_frame = ttk.Frame(corr_frame)
+        delay_frame.pack(fill=tk.X, pady=6, padx=4)
+        ttk.Label(delay_frame, text="Fs (Hz):").pack(side=tk.LEFT)
+        self.fs_delay_entry = ttk.Entry(delay_frame, width=8)
+        self.fs_delay_entry.pack(side=tk.LEFT, padx=6)
+        self.fs_delay_entry.insert(0, "100.0")
+        ttk.Button(delay_frame, text="Estimate Delay", style='Shift.TButton',
+                   command=self.estimate_time_delay).pack(side=tk.LEFT, padx=6)
+
+        # Signal statistics
+        ttk.Button(corr_frame, text="Signal Statistics", style='Compare.TButton',
+                   command=self.show_signal_statistics).pack(fill=tk.X, pady=6)
+
         # Plot buttons
         plot_btn_frame = ttk.LabelFrame(control_frame, text="Plotting", padding="6")
         plot_btn_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
@@ -589,6 +615,138 @@ class DSPApplication:
         self.ax.grid(True, alpha=0.3)
         
         self.canvas.draw()
+
+    def compute_correlation(self):
+        """Compute cross-correlation between two selected signals"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 2:
+            messagebox.showwarning("Warning", "Please select exactly two signals for correlation")
+            return
+        
+        try:
+            signal1 = selected_signals[0]
+            signal2 = selected_signals[1]
+            
+            from dsp_signal.correlation import correlate_signals
+            correlation_signal = correlate_signals(signal1, signal2)
+            
+            self.result_signal = correlation_signal
+            self.plot_result()
+            
+            # Find correlation peak
+            from dsp_signal.correlation import find_correlation_peak
+            correlation_dict = correlation_signal.to_dict()
+            peak_lag, peak_value = find_correlation_peak(correlation_dict)
+            
+            messagebox.showinfo("Success", 
+                              f"Correlation computed successfully!\n"
+                              f"Peak at lag {peak_lag} samples\n"
+                              f"Peak value: {peak_value:.6f}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Correlation failed: {str(e)}")
+
+    def compute_autocorrelation(self):
+        """Compute autocorrelation of selected signal"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 1:
+            messagebox.showwarning("Warning", "Please select exactly one signal for autocorrelation")
+            return
+        
+        try:
+            signal = selected_signals[0]
+            
+            from dsp_signal.correlation import autocorrelate_signal
+            autocorr_signal = autocorrelate_signal(signal)
+            
+            self.result_signal = autocorr_signal
+            self.plot_result()
+            
+            messagebox.showinfo("Success", "Autocorrelation computed successfully!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Autocorrelation failed: {str(e)}")
+
+    def estimate_time_delay(self):
+        """Estimate time delay between two signals"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 2:
+            messagebox.showwarning("Warning", "Please select exactly two signals for delay estimation")
+            return
+        
+        try:
+            fs = float(self.fs_delay_entry.get())
+            if fs <= 0:
+                raise ValueError("Sampling frequency must be positive")
+            
+            signal1 = selected_signals[0]
+            signal2 = selected_signals[1]
+            
+            from dsp_signal.correlation import estimate_time_delay
+            lag_samples, delay_seconds, correlation_dict = estimate_time_delay(
+                signal1.to_dict(),
+                signal2.to_dict(),
+                fs
+            )
+            
+            # Create correlation signal for plotting
+            correlation_signal = Signal(
+                indices=list(correlation_dict.keys()),
+                samples=list(correlation_dict.values()),
+                name=f"Correlation_{signal1.name}_{signal2.name}"
+            )
+            
+            self.result_signal = correlation_signal
+            self.plot_result()
+            
+            # Show results
+            result_text = (f"Time Delay Estimation:\n"
+                          f"Sampling Frequency: {fs} Hz\n"
+                          f"Lag: {lag_samples} samples\n"
+                          f"Delay: {delay_seconds:.6f} seconds\n"
+                          f"Delay: {delay_seconds*1000:.3f} ms")
+            
+            messagebox.showinfo("Delay Estimation", result_text)
+            
+        except ValueError as ve:
+            messagebox.showerror("Error", f"Invalid input: {str(ve)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Delay estimation failed: {str(e)}")
+
+    def show_signal_statistics(self):
+        """Display statistics of selected signal"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 1:
+            messagebox.showwarning("Warning", "Please select exactly one signal")
+            return
+        
+        try:
+            signal = selected_signals[0]
+            
+            from dsp_signal.time_analysis import analyze_signal_statistics
+            stats = analyze_signal_statistics(signal.to_dict())
+            
+            if not stats:
+                messagebox.showinfo("Statistics", "No statistics available")
+                return
+            
+            # Format statistics
+            stats_text = f"Statistics for '{signal.name}':\n\n"
+            stats_text += f"Number of samples: {len(signal.samples)}\n"
+            stats_text += f"Mean: {stats.get('mean', 0):.6f}\n"
+            stats_text += f"Standard Deviation: {stats.get('std', 0):.6f}\n"
+            stats_text += f"Variance: {stats.get('variance', 0):.6f}\n"
+            stats_text += f"Minimum: {stats.get('min', 0):.6f}\n"
+            stats_text += f"Maximum: {stats.get('max', 0):.6f}\n"
+            stats_text += f"Range: {stats.get('range', 0):.6f}\n"
+            stats_text += f"Energy: {stats.get('energy', 0):.6f}\n"
+            stats_text += f"Power: {stats.get('power', 0):.6f}\n"
+            stats_text += f"RMS: {stats.get('rms', 0):.6f}"
+            
+            messagebox.showinfo("Signal Statistics", stats_text)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Statistics calculation failed: {str(e)}")
 
     def plot_selected(self):
         selected_signals = self.get_selected_signals()

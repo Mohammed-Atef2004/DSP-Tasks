@@ -122,6 +122,12 @@ class DSPApplication:
         ttk.Button(corr_frame, text="Direct Correlation", style='dcorr.TButton', command=self.compute_correlation_cleaned).pack(fill=tk.X, pady=2)
         ttk.Button(corr_frame, text="Estimate Time Delay", style='est.TButton', command=self.estimate_delay_cleaned).pack(fill=tk.X, pady=2)
         ttk.Button(corr_frame, text="Classify (Class A vs B)", style='class.TButton', command=self.classify_signal_logic).pack(fill=tk.X, pady=2)
+
+        # --- Filtering ---
+        filter_frame = ttk.LabelFrame(control_frame, text="FIR Filtering", padding="6")
+        filter_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Button(filter_frame, text="Design & Apply Filter", style='Filter.TButton', 
+                command=self.open_filter_dialog).pack(fill=tk.X)
         
         # Comparison
         compare_frame = ttk.LabelFrame(control_frame, text="Signal Comparison", padding="6")
@@ -594,6 +600,76 @@ class DSPApplication:
             
             res = "Class A" if max_a > max_b else "Class B"
             messagebox.showinfo("Result", f"The signal belongs to: {res}")
+
+
+    def open_filter_dialog(self):
+        selected = self.get_selected_signals()
+        if not selected:
+            messagebox.showwarning("Warning", "Select a signal to filter first.")
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("FIR Filter Specifications")
+        dialog.geometry("350x450")
+
+        ttk.Label(dialog, text="Filter Type:").pack(pady=2)
+        ftype = ttk.Combobox(dialog, values=["Low", "High", "BandPass", "BandStop"])
+        ftype.set("Low")
+        ftype.pack(pady=2)
+
+        ttk.Label(dialog, text="Stopband Attenuation (dB):").pack(pady=2)
+        atten_entry = ttk.Entry(dialog); atten_entry.insert(0, "44"); atten_entry.pack()
+
+        ttk.Label(dialog, text="Transition Band (Hz):").pack(pady=2)
+        trans_entry = ttk.Entry(dialog); trans_entry.insert(0, "500"); trans_entry.pack()
+
+        ttk.Label(dialog, text="FC (or F1) (Hz):").pack(pady=2)
+        f1_entry = ttk.Entry(dialog); f1_entry.pack()
+
+        ttk.Label(dialog, text="F2 (Hz) (for Band):").pack(pady=2)
+        f2_entry = ttk.Entry(dialog); f2_entry.pack()
+        
+        method_var = tk.StringVar(value="Direct")
+        ttk.Radiobutton(dialog, text="Direct (Time)", variable=method_var, value="Direct").pack()
+        ttk.Radiobutton(dialog, text="Fast (Freq)", variable=method_var, value="Fast").pack()
+
+        def run_filter():
+            try:
+                from dsp_signal.Filters import design_fir_filter, apply_fast_filtering
+                from dsp_signal.operations import convolve_signals
+                
+                fs = float(self.fs_entry.get())
+                # Design the filter
+                filter_sig = design_fir_filter(
+                    ftype.get(), fs, 
+                    fc=float(f1_entry.get() or 0),
+                    f1=float(f1_entry.get() or 0), 
+                    f2=float(f2_entry.get() or 0),
+                    attenuation=float(atten_entry.get()),
+                    transband=float(trans_entry.get())
+                )
+                
+                # Choose Method
+                if method_var.get() == "Direct":
+                    self.result_signal = convolve_signals(selected[0], filter_sig)
+                else:
+                    self.result_signal = apply_fast_filtering(selected[0], filter_sig)
+                
+                # Save coefficients to file automatically as per requirement
+                self.save_coefficients(filter_sig)
+                self.plot_result()
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Filter failed: {str(e)}")
+
+        ttk.Button(dialog, text="Apply Filter", command=run_filter).pack(pady=10)
+
+    def save_coefficients(self, filter_sig):
+        with open("filter_coefficients.txt", "w") as f:
+            f.write("FIR Filter Coefficients\n")
+            for i, h in zip(filter_sig.indices, filter_sig.samples):
+                f.write(f"Index {i}: {h}\n")
+        print("Coefficients saved to filter_coefficients.txt")
 
     def plot_selected(self):
         selected_signals = self.get_selected_signals()

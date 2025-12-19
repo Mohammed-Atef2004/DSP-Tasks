@@ -25,6 +25,7 @@ def setup_styles(style):
         'dcorr.TButton': ('#43a047', '#2e7d32'),
         'est.TButton': ('#fb8c00', '#ef6c00'),
         'class.TButton': ('#00897b', '#00695c'),
+        'Filter.TButton': ('#2980b9', '#1a5276'),
     }
 
     for style_name, (bg_color, active_bg) in styles_config.items():

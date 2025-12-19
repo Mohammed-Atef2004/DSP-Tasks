@@ -3,7 +3,6 @@ import math
 from .signal import Signal
 
 def compute_correlation_faculty(signal1_dict, signal2_dict):
-    """Faculty requirement: Direct correlation with normalization."""
     # Convert dicts to arrays
     x = np.array(list(signal1_dict.values()))
     y = np.array(list(signal2_dict.values()))
@@ -11,7 +10,7 @@ def compute_correlation_faculty(signal1_dict, signal2_dict):
     N = len(x)
     r_xy = []
     
-    # Faculty Normalization: 1/N * sum(x*y) / (sqrt(Ex*Ey)/N)
+    # Normalization: 1/N * sum(x*y) / (sqrt(Ex*Ey)/N)
     # Simplified: sum(x*y) / sqrt(Ex*Ey)
     norm = math.sqrt(np.sum(x**2) * np.sum(y**2))
     
@@ -21,7 +20,7 @@ def compute_correlation_faculty(signal1_dict, signal2_dict):
     for j in range(N):
         sum_val = 0
         for n in range(N):
-            # Circular correlation as discussed in lab
+            # Circular correlation
             sum_val += x[n] * y[(n + j) % N]
         r_xy.append(sum_val / norm)
     

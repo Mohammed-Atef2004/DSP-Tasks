@@ -5,13 +5,14 @@ matplotlib.use('TkAgg')  # Force TkAgg backend
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
+import math
 
 from dsp_signal.signal import Signal
 from dsp_signal.file_io import ReadSignalFile
 from dsp_signal.operations import derivative_signal, convolve_signals, moving_average_signal
 from dsp_signal.fourier import fourier_transform_signal, inverse_fourier_transform
 from dsp_signal.correlation import correlate_signals, estimate_time_delay, compute_correlation_faculty
-from utils.comparison import compare_signals
+from utils.comparison import compare_signals, SignalComapreAmplitude, SignalComaprePhaseShift
 from gui.styles import setup_styles
 
 class DSPApplication:
@@ -110,8 +111,9 @@ class DSPApplication:
         self.fs_entry.insert(0, "1.0")
         self.fs_entry.pack(fill=tk.X, pady=2)
 
-        ttk.Button(fourier_frame, text="Apply DFT (Smart)", style='dft.TButton', command=self.compute_dft_cleaned).pack(fill=tk.X, pady=2)
+        ttk.Button(fourier_frame, text="Apply DFT", style='dft.TButton', command=self.compute_dft_cleaned).pack(fill=tk.X, pady=2)
         ttk.Button(fourier_frame, text="Reconstruct (IDFT)", style='idft.TButton', command=self.compute_idft_cleaned).pack(fill=tk.X, pady=2)
+        ttk.Button(fourier_frame, text="test fourier", style='testf.TButton', command=self.test_fourier_results).pack(fill=tk.X, pady=2)
 
         # --- Correlation & Classification ---
         corr_frame = ttk.LabelFrame(control_frame, text="Correlation & Time Analysis", padding="6")
@@ -489,6 +491,62 @@ class DSPApplication:
         
         self.result_signal = inverse_fourier_transform(self.magnitude_signal, self.phase_signal)
         self.plot_result()
+
+    def test_fourier_results(self):
+        """Faculty Guide: Fixed to handle 'f' suffixes and custom headers"""
+        if not self.magnitude_signal or not self.phase_signal:
+            messagebox.showwarning("Warning", "Please compute DFT first.")
+            return
+
+        filename = filedialog.askopenfilename(title="Select Expected DFT Output File")
+        if not filename:
+            return
+
+        expected_amp = []
+        expected_phase = []
+        
+        try:
+            with open(filename, 'r') as f:
+                # 1. Skip the 3-line header based on your file sample
+                f.readline() # Skip '1'
+                f.readline() # Skip '0'
+                f.readline() # Skip '8' (number of samples)
+                
+                # 2. Read data lines
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    # Split by any whitespace
+                    parts = line.split()
+                    if len(parts) == 2:
+                        # REMOVE the 'f' character from the end of strings before converting to float
+                        amp_str = parts[0].replace('f', '').replace('F', '')
+                        phase_str = parts[1].replace('f', '').replace('F', '')
+                        
+                        expected_amp.append(float(amp_str))
+                        expected_phase.append(float(phase_str))
+
+            # 3. Preparation for Faculty Functions
+            your_amp = self.magnitude_signal.samples
+            # Convert your Degrees to Radians for their test
+            your_phase_rad = [math.radians(p) for p in self.phase_signal.samples]
+
+            from utils.comparison import SignalComapreAmplitude, SignalComaprePhaseShift
+            
+            # 4. Run comparison and check condition
+            amp_match = SignalComapreAmplitude(your_amp, expected_amp)
+            phase_match = SignalComaprePhaseShift(your_phase_rad, expected_phase)
+
+            if amp_match and phase_match:
+                messagebox.showinfo("Success", "DFT Test case passed successfully!")
+            else:
+                msg = f"Test Failed!\nAmplitude Match: {amp_match}\nPhase Match: {phase_match}"
+                messagebox.showerror("DFT Test", msg)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to parse file: {str(e)}")
 
     def compute_correlation_cleaned(self):
         """Apply direct correlation following faculty logic"""

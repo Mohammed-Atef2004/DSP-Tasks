@@ -23,3 +23,29 @@ def compare_signals(Your_indices, Your_samples, file_name):
 
     print("Comparison test case passed successfully")
     return True
+
+
+
+
+
+import math
+
+def SignalComapreAmplitude(SignalInput, SignalOutput):
+    if len(SignalInput) != len(SignalOutput):
+        return False
+    for i in range(len(SignalInput)):
+        # Tolerance of 0.001 as per faculty requirement
+        if abs(SignalInput[i] - SignalOutput[i]) > 0.001:
+            return False
+    return True
+
+def SignalComaprePhaseShift(SignalInput, SignalOutput):
+    if len(SignalInput) != len(SignalOutput):
+        return False
+    for i in range(len(SignalInput)):
+        # Rounding and tolerance of 0.0001 as per faculty requirement
+        A = round(SignalInput[i], 4)
+        B = round(SignalOutput[i], 4)
+        if abs(A - B) > 0.0001:
+            return False
+    return True

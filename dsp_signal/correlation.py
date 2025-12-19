@@ -2,36 +2,42 @@ import numpy as np
 import math
 from .signal import Signal
 
-def compute_correlation_values(x, y):
+def compute_correlation_faculty(signal1_dict, signal2_dict):
+    """Faculty requirement: Direct correlation with normalization."""
+    # Convert dicts to arrays
+    x = np.array(list(signal1_dict.values()))
+    y = np.array(list(signal2_dict.values()))
+    
     N = len(x)
-    # Ensure signals are same length for circular/direct correlation
     r_xy = []
     
-    # Faculty Normalization Factor
-    norm = math.sqrt(np.sum(x**2) * np.sum(y**2)) / N
+    # Faculty Normalization: 1/N * sum(x*y) / (sqrt(Ex*Ey)/N)
+    # Simplified: sum(x*y) / sqrt(Ex*Ey)
+    norm = math.sqrt(np.sum(x**2) * np.sum(y**2))
     
+    if norm == 0:
+        return {float(i): 0.0 for i in range(N)}
+
     for j in range(N):
         sum_val = 0
         for n in range(N):
-            # Using periodic/circular indexing for direct correlation
+            # Circular correlation as discussed in lab
             sum_val += x[n] * y[(n + j) % N]
-        r_xy.append((sum_val / N) / norm)
+        r_xy.append(sum_val / norm)
     
-    return r_xy
+    return {float(i): val for i, val in enumerate(r_xy)}
 
-def classify_signal(signal, class_a_template, class_b_template):
-    """Classifies signal based on max correlation with category templates."""
-    corr_a = compute_correlation_values(np.array(signal.samples), np.array(class_a_template.samples))
-    corr_b = compute_correlation_values(np.array(signal.samples), np.array(class_b_template.samples))
-    
-    max_a = max(corr_a)
-    max_b = max(corr_b)
-    
-    return "Class A" if max_a > max_b else "Class B"
+def correlate_signals(signal1, signal2, faculty_format=True):
+    """Wrapper to return a Signal object for the GUI."""
+    corr_dict = compute_correlation_faculty(signal1.to_dict(), signal2.to_dict())
+    indices = list(corr_dict.keys())
+    samples = list(corr_dict.values())
+    return Signal(indices, samples, f"Corr_{signal1.name}")
 
-def estimate_time_delay(signal1, signal2, fs):
-    """Estimates delay in seconds based on max correlation peak."""
-    r_xy = compute_correlation_values(np.array(signal1.samples), np.array(signal2.samples))
-    max_lag = np.argmax(r_xy)
+def estimate_time_delay(signal1_dict, signal2_dict, fs):
+    """Computes lag and time delay."""
+    corr_dict = compute_correlation_faculty(signal1_dict, signal2_dict)
+    samples = list(corr_dict.values())
+    max_lag = np.argmax(samples)
     delay = max_lag / fs
-    return max_lag, delay
+    return max_lag, delay, corr_dict

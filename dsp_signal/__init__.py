@@ -2,7 +2,7 @@ from .signal import Signal
 from .file_io import ReadSignalFile
 from .operations import derivative_signal, convolve_signals, moving_average_signal
 from .fourier import (dft_logic, fourier_transform_signal, inverse_fourier_transform)
-from .correlation import (compute_correlation_values, estimate_time_delay, classify_signal)
+from .correlation import (compute_correlation_faculty, estimate_time_delay, correlate_signals)
 
 __all__ = [
     'Signal', 
@@ -13,7 +13,7 @@ __all__ = [
     'dft_logic',
     'fourier_transform_signal',
     'inverse_fourier_transform',
-    'compute_correlation_values',
+    'compute_correlation_faculty',
     'estimate_time_delay',
-    'classify_signal'
+    'correlate_signals'
 ]

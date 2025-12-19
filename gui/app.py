@@ -101,6 +101,32 @@ class DSPApplication:
                                           bg="#fafafa", fg="#111", font=('Consolas', 10))
         self.signals_listbox.pack(fill=tk.X, pady=6)
 
+        # --- Fourier Transform ---
+        fourier_frame = ttk.LabelFrame(control_frame, text="Fourier Analysis", padding="6")
+        fourier_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(fourier_frame, text="Sampling Freq (Hz):").pack(anchor=tk.W)
+        self.fs_entry = ttk.Entry(fourier_frame)
+        self.fs_entry.insert(0, "1.0")
+        self.fs_entry.pack(fill=tk.X, pady=2)
+
+        ttk.Button(fourier_frame, text="Apply DFT (Smart)", style='dft.TButton', command=self.compute_dft_cleaned).pack(fill=tk.X, pady=2)
+        ttk.Button(fourier_frame, text="Reconstruct (IDFT)", style='idft.TButton', command=self.compute_idft_cleaned).pack(fill=tk.X, pady=2)
+
+        # --- Correlation & Classification ---
+        corr_frame = ttk.LabelFrame(control_frame, text="Correlation & Time Analysis", padding="6")
+        corr_frame.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Button(corr_frame, text="Direct Correlation", style='dcorr.TButton', command=self.compute_correlation_cleaned).pack(fill=tk.X, pady=2)
+        ttk.Button(corr_frame, text="Estimate Time Delay", style='est.TButton', command=self.estimate_delay_cleaned).pack(fill=tk.X, pady=2)
+        ttk.Button(corr_frame, text="Classify (Class A vs B)", style='class.TButton', command=self.classify_signal_logic).pack(fill=tk.X, pady=2)
+        
+        # Comparison
+        compare_frame = ttk.LabelFrame(control_frame, text="Signal Comparison", padding="6")
+        compare_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
+        ttk.Button(compare_frame, text="Compare with File", style='Compare.TButton',
+                   command=self.compare_with_file).pack(fill=tk.X, pady=6)
+        
         # Basic Operations
         ops_frame = ttk.LabelFrame(control_frame, text="Basic Operations", padding="6")
         ops_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
@@ -160,12 +186,6 @@ class DSPApplication:
         ttk.Button(mov_avg_frame, text="Moving Average", style='MovingAvg.TButton',
                    command=self.calculate_moving_average).pack(side=tk.LEFT)
 
-        # Comparison
-        compare_frame = ttk.LabelFrame(control_frame, text="Signal Comparison", padding="6")
-        compare_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
-        ttk.Button(compare_frame, text="Compare with File", style='Compare.TButton',
-                   command=self.compare_with_file).pack(fill=tk.X, pady=6)
-
         # Display options
         disp_frame = ttk.LabelFrame(control_frame, text="Display Options", padding=6)
         disp_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
@@ -183,30 +203,6 @@ class DSPApplication:
         ttk.Label(fs_frame, text="Time-plot fs (Hz):").pack(side=tk.LEFT)
         self.fs_entry = ttk.Entry(fs_frame, width=8, textvariable=self.fs_for_time_plot)
         self.fs_entry.pack(side=tk.LEFT, padx=6)
-
-        # --- Fourier Transform ---
-        fourier_frame = ttk.LabelFrame(self.control_frame, text="Fourier Analysis", padding="6")
-        fourier_frame.pack(fill=tk.X, pady=(0, 10))
-
-        ttk.Label(fourier_frame, text="Sampling Freq (Hz):").pack(anchor=tk.W)
-        self.fs_entry = ttk.Entry(fourier_frame)
-        self.fs_entry.insert(0, "1.0")
-        self.fs_entry.pack(fill=tk.X, pady=2)
-
-        ttk.Button(fourier_frame, text="Apply DFT (Smart)", command=self.compute_dft_cleaned).pack(fill=tk.X, pady=2)
-        ttk.Button(fourier_frame, text="Reconstruct (IDFT)", command=self.compute_idft_cleaned).pack(fill=tk.X, pady=2)
-
-        # --- Correlation & Classification ---
-        corr_frame = ttk.LabelFrame(self.control_frame, text="Correlation & Time Analysis", padding="6")
-        corr_frame.pack(fill=tk.X, pady=(0, 10))
-
-        ttk.Button(corr_frame, text="Direct Correlation", command=self.compute_correlation_cleaned).pack(fill=tk.X, pady=2)
-        ttk.Button(corr_frame, text="Estimate Time Delay", command=self.estimate_delay_cleaned).pack(fill=tk.X, pady=2)
-        ttk.Button(corr_frame, text="Classify (Class A vs B)", command=self.classify_signal_logic).pack(fill=tk.X, pady=2)
-
-        # Signal statistics
-        ttk.Button(corr_frame, text="Signal Statistics", style='Compare.TButton',
-                   command=self.show_signal_statistics).pack(fill=tk.X, pady=6)
 
         # Plot buttons
         plot_btn_frame = ttk.LabelFrame(control_frame, text="Plotting", padding="6")

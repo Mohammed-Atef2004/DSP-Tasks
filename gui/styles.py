@@ -20,8 +20,11 @@ def setup_styles(style):
         'Convolution.TButton': ('#00897b', '#00695c'),
         'MovingAvg.TButton': ('#f57c00', '#e65100'),
         'Compare.TButton': ('#546e7a', '#37474f'),
-        'Fourier.TButton': ('#8e44ad', '#732d91'),
-        'IDFT.TButton': ('#16a085', '#138d75'),
+        'dft.TButton': ('#8e44ad', '#732d91'),
+        'idft.TButton': ('#16a085', '#138d75'),
+        'dcorr.TButton': ('#43a047', '#2e7d32'),
+        'est.TButton': ('#fb8c00', '#ef6c00'),
+        'class.TButton': ('#00897b', '#00695c'),
     }
 
     for style_name, (bg_color, active_bg) in styles_config.items():

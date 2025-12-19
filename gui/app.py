@@ -1,73 +1,17 @@
-#!/usr/bin/env python3
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import matplotlib
+matplotlib.use('TkAgg')  # Force TkAgg backend
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
-from typing import List, Tuple, Dict
 
-
-class Signal:
-    def __init__(self, indices=None, samples=None, name=""):
-        self.indices = indices if indices is not None else []
-        self.samples = samples if samples is not None else []
-        self.name = name
-
-    def __str__(self):
-        return f"Signal '{self.name}': {len(self.indices)} samples"
-
-    def get_plot_data(self):
-        """Return data suitable for matplotlib plotting"""
-        return self.indices, self.samples
-
-    def get_time_series(self, fs: float) -> Tuple[np.ndarray, np.ndarray]:
-        """Return time vector and samples sampled at rate fs for continuous plotting convenience."""
-        if not self.indices:
-            return np.array([]), np.array([])
-        n = np.array(self.indices)
-        t = n / fs
-        y = np.array(self.samples)
-        return t, y
-
-    def to_dict(self) -> Dict[float, float]:
-        """Convert signal to dictionary format for the new functions"""
-        return {float(idx): float(sample) for idx, sample in zip(self.indices, self.samples)}
-
-    @classmethod
-    def from_dict(cls, signal_dict: Dict[float, float], name: str = ""):
-        """Create Signal object from dictionary"""
-        indices = list(signal_dict.keys())
-        samples = list(signal_dict.values())
-        return cls(indices, samples, name)
-
-def ReadSignalFile(file_name):
-    """Read signal from file (compatible with original format)"""
-    try:
-        with open(file_name, 'r') as f:
-            f.readline()  # skip first two lines
-            f.readline()
-            num_samples_line = f.readline().strip()
-            if not num_samples_line:
-                raise ValueError("Invalid file format")
-            num_samples = int(num_samples_line)
-
-            indices = []
-            samples = []
-            for _ in range(num_samples):
-                line = f.readline().strip()
-                if not line:
-                    break
-                parts = line.split()
-                if len(parts) == 2:
-                    indices.append(int(parts[0]))
-                    samples.append(float(parts[1]))
-
-            return indices, samples
-    except Exception as e:
-        raise ValueError(f"Error reading file: {str(e)}")
-
-
-# ==================== MODIFIED DSP APPLICATION ====================
+from dsp_signal.signal import Signal
+from dsp_signal.file_io import ReadSignalFile
+from dsp_signal.operations import derivative_signal, convolve_signals, moving_average_signal
+from dsp_signal.fourier import fourier_transform_signal, inverse_fourier_transform
+from utils.comparison import compare_signals
+from gui.styles import setup_styles
 
 class DSPApplication:
     def __init__(self, root):
@@ -93,44 +37,23 @@ class DSPApplication:
         except Exception:
             pass
 
+        # Setup styles
+        self.style = ttk.Style(self.root)
+        setup_styles(self.style)
+        
         # Add menu bar for signal generation
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
+        
         signal_gen_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label='Signal Generation', menu=signal_gen_menu)
         signal_gen_menu.add_command(label='Sine Wave', command=lambda: self.open_generate_dialog('sine'))
         signal_gen_menu.add_command(label='Cosine Wave', command=lambda: self.open_generate_dialog('cosine'))
 
-        # Define color styles
-        self.setup_button_styles()
-
         # build UI
         self.setup_gui()
 
-    def setup_button_styles(self):
-        """Setup button styles for different operations"""
-        styles_config = {
-            'Load.TButton': ('#1e88e5', '#1565c0'),
-            'ClearAll.TButton': ('#e53935', '#b71c1c'),
-            'Add.TButton': ('#43a047', '#2e7d32'),
-            'Subtract.TButton': ('#fb8c00', '#ef6c00'),
-            'Multiply.TButton': ('#8e24aa', '#6a1b9a'),
-            'Shift.TButton': ('#00acc1', '#00838f'),
-            'Fold.TButton': ('#6d6e71', '#424242'),
-            'Plot.TButton': ('#1565c0', '#0d47a1'),
-            'Save.TButton': ('#7cb342', '#558b2f'),
-            'ClearResult.TButton': ('#ef5350', '#e53935'),
-            'Derivative.TButton': ('#5e35b1', '#4527a0'),
-            'Convolution.TButton': ('#00897b', '#00695c'),
-            'MovingAvg.TButton': ('#f57c00', '#e65100'),
-            'Compare.TButton': ('#546e7a', '#37474f')
-        }
-
-        for style_name, (bg_color, active_bg) in styles_config.items():
-            self.style.configure(style_name, foreground='white', background=bg_color,
-                                 font=('Segoe UI', 10, 'bold'), padding=6)
-            self.style.map(style_name, background=[('active', active_bg)])
 
     def setup_gui(self):
         # plot on left, controls on right
@@ -205,7 +128,6 @@ class DSPApplication:
         ttk.Button(ops_frame, text="Quantize Signal", style='Multiply.TButton',
                    command=self.quantize_signal).pack(fill=tk.X, pady=6)
 
-        # NEW DSP OPERATIONS
         dsp_frame = ttk.LabelFrame(control_frame, text="Advanced DSP Operations", padding="6")
         dsp_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
 
@@ -238,6 +160,30 @@ class DSPApplication:
         compare_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
         ttk.Button(compare_frame, text="Compare with File", style='Compare.TButton',
                    command=self.compare_with_file).pack(fill=tk.X, pady=6)
+        
+        # Fourier Transform Operations
+        fourier_frame = ttk.LabelFrame(control_frame, text="Fourier Transform", padding="6")
+        fourier_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
+
+        # Sampling frequency input
+        fs_frame = ttk.Frame(fourier_frame)
+        fs_frame.pack(fill=tk.X, pady=6, padx=4)
+        ttk.Label(fs_frame, text="Sampling Freq (Hz):").pack(side=tk.LEFT)
+        self.fs_fourier_entry = ttk.Entry(fs_frame, width=10)
+        self.fs_fourier_entry.pack(side=tk.LEFT, padx=6)
+        self.fs_fourier_entry.insert(0, "100.0")
+
+        # DFT Button
+        ttk.Button(fourier_frame, text="Compute DFT", style='Derivative.TButton',
+                command=self.compute_dft).pack(fill=tk.X, pady=6)
+
+        # IDFT Button
+        ttk.Button(fourier_frame, text="Reconstruct (IDFT)", style='Convolution.TButton',
+                command=self.compute_idft).pack(fill=tk.X, pady=6)
+
+        # Store Fourier results
+        self.magnitude_signal = None
+        self.phase_signal = None
 
         # Display options
         disp_frame = ttk.LabelFrame(control_frame, text="Display Options", padding=6)
@@ -256,6 +202,32 @@ class DSPApplication:
         ttk.Label(fs_frame, text="Time-plot fs (Hz):").pack(side=tk.LEFT)
         self.fs_entry = ttk.Entry(fs_frame, width=8, textvariable=self.fs_for_time_plot)
         self.fs_entry.pack(side=tk.LEFT, padx=6)
+
+        # Correlation Analysis
+        corr_frame = ttk.LabelFrame(control_frame, text="Correlation & Time Analysis", padding="6")
+        corr_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
+
+        # Cross-correlation
+        ttk.Button(corr_frame, text="Cross-Correlation", style='Convolution.TButton',
+                   command=self.compute_correlation).pack(fill=tk.X, pady=6)
+
+        # Auto-correlation
+        ttk.Button(corr_frame, text="Auto-Correlation", style='MovingAvg.TButton',
+                   command=self.compute_autocorrelation).pack(fill=tk.X, pady=6)
+
+        # Time delay estimation
+        delay_frame = ttk.Frame(corr_frame)
+        delay_frame.pack(fill=tk.X, pady=6, padx=4)
+        ttk.Label(delay_frame, text="Fs (Hz):").pack(side=tk.LEFT)
+        self.fs_delay_entry = ttk.Entry(delay_frame, width=8)
+        self.fs_delay_entry.pack(side=tk.LEFT, padx=6)
+        self.fs_delay_entry.insert(0, "100.0")
+        ttk.Button(delay_frame, text="Estimate Delay", style='Shift.TButton',
+                   command=self.estimate_time_delay).pack(side=tk.LEFT, padx=6)
+
+        # Signal statistics
+        ttk.Button(corr_frame, text="Signal Statistics", style='Compare.TButton',
+                   command=self.show_signal_statistics).pack(fill=tk.X, pady=6)
 
         # Plot buttons
         plot_btn_frame = ttk.LabelFrame(control_frame, text="Plotting", padding="6")
@@ -282,9 +254,7 @@ class DSPApplication:
         self.ax.grid(True, alpha=0.3)
         self.ax.set_xlabel('Index (n)')
         self.ax.set_ylabel('Amplitude')
-        self.ax.set_title('Signal Visualization')
-
-    # ==================== NEW DSP OPERATIONS METHODS ====================
+        self.ax.set_title('Signal Visualization')    
 
     def calculate_derivative(self):
         """Calculate derivative of selected signal"""
@@ -379,8 +349,6 @@ class DSPApplication:
 
         except Exception as e:
             messagebox.showerror("Error", f"Comparison failed: {str(e)}")
-
-    # ==================== EXISTING METHODS (keep as is) ====================
 
     def read_signal_file(self, filename):
         # Using the same ReadSignalFile function for consistency
@@ -508,7 +476,277 @@ class DSPApplication:
         if len(selected_signals) != 1:
             messagebox.showwarning("Warning", "Please select exactly one signal to quantize")
             return
-        # ... (keep existing quantize_signal implementation)
+    
+    def compute_dft(self):
+        """Compute Discrete Fourier Transform of selected signal"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 1:
+            messagebox.showwarning("Warning", "Please select exactly one signal for DFT")
+            return
+        
+        try:
+            # Get sampling frequency
+            sampling_freq = float(self.fs_fourier_entry.get())
+            if sampling_freq <= 0:
+                raise ValueError("Sampling frequency must be positive")
+            
+            signal = selected_signals[0]
+            
+            # Compute Fourier Transform
+            self.magnitude_signal, self.phase_signal = fourier_transform_signal(signal, sampling_freq)
+            
+            # Plot magnitude and phase
+            self.plot_fourier_results()
+            
+            messagebox.showinfo("Success", 
+                              f"DFT computed successfully!\n"
+                              f"Sampling Frequency: {sampling_freq} Hz\n"
+                              f"Nyquist Frequency: {sampling_freq/2:.2f} Hz")
+            
+        except ValueError as ve:
+            messagebox.showerror("Error", f"Invalid input: {str(ve)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"DFT computation failed: {str(e)}")
+
+    def compute_idft(self):
+        """Reconstruct signal using Inverse DFT"""
+        if self.magnitude_signal is None:
+            messagebox.showwarning("Warning", "No Fourier transform results available.\nPlease compute DFT first.")
+            return
+        
+        try:
+            # Reconstruct signal from magnitude (and phase if available)
+            reconstructed_signal = inverse_fourier_transform(
+                self.magnitude_signal, 
+                self.phase_signal
+            )
+            
+            self.result_signal = reconstructed_signal
+            self.plot_result()
+            
+            # Compare with original if available
+            selected_signals = self.get_selected_signals()
+            if selected_signals:
+                original = selected_signals[0]
+                # Calculate reconstruction error
+                if len(original.samples) == len(reconstructed_signal.samples):
+                    error = np.sqrt(np.mean((
+                        np.array(original.samples[:len(reconstructed_signal.samples)]) - 
+                        np.array(reconstructed_signal.samples)
+                    )**2))
+                    messagebox.showinfo("Success", 
+                                      f"Signal reconstructed successfully!\n"
+                                      f"Reconstruction RMSE: {error:.6f}")
+                else:
+                    messagebox.showinfo("Success", "Signal reconstructed successfully!")
+            else:
+                messagebox.showinfo("Success", "Signal reconstructed successfully!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"IDFT computation failed: {str(e)}")
+
+    def plot_fourier_results(self):
+        """Plot magnitude and phase spectra"""
+        if self.magnitude_signal is None:
+            return
+        
+        # Create a new figure with subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+        
+        # Plot magnitude spectrum
+        indices_mag, samples_mag = self.magnitude_signal.get_plot_data()
+        ax1.stem(indices_mag, samples_mag, linefmt='b-', markerfmt='bo', basefmt=' ')
+        ax1.set_xlabel('Frequency Bin (k)')
+        ax1.set_ylabel('Magnitude')
+        ax1.set_title(f'Magnitude Spectrum - {self.magnitude_signal.name}')
+        ax1.grid(True, alpha=0.3)
+        
+        # Plot phase spectrum if available
+        if self.phase_signal is not None:
+            indices_phase, samples_phase = self.phase_signal.get_plot_data()
+            ax2.stem(indices_phase, samples_phase, linefmt='r-', markerfmt='ro', basefmt=' ')
+            ax2.set_xlabel('Frequency Bin (k)')
+            ax2.set_ylabel('Phase (degrees)')
+            ax2.set_title(f'Phase Spectrum - {self.phase_signal.name}')
+        else:
+            ax2.text(0.5, 0.5, 'No phase information available', 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=ax2.transAxes)
+            ax2.set_title('Phase Spectrum')
+        
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Show in a separate window
+        plt.show()
+
+    def plot_fourier_single(self):
+        """Plot Fourier results in the main canvas"""
+        if self.magnitude_signal is None:
+            return
+        
+        self.ax.clear()
+        
+        # Plot magnitude
+        indices, samples = self.magnitude_signal.get_plot_data()
+        self.ax.stem(indices, samples, linefmt='b-', markerfmt='bo', basefmt=' ', 
+                    label='Magnitude')
+        
+        # Plot phase on secondary axis if available
+        if self.phase_signal is not None:
+            ax2 = self.ax.twinx()
+            indices_phase, samples_phase = self.phase_signal.get_plot_data()
+            ax2.plot(indices_phase, samples_phase, 'r--', label='Phase (degrees)', alpha=0.7)
+            ax2.set_ylabel('Phase (degrees)', color='r')
+            ax2.tick_params(axis='y', labelcolor='r')
+            
+            # Combine legends
+            lines1, labels1 = self.ax.get_legend_handles_labels()
+            lines2, labels2 = ax2.get_legend_handles_labels()
+            self.ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+        else:
+            self.ax.legend()
+        
+        self.ax.set_xlabel('Frequency Bin (k)')
+        self.ax.set_ylabel('Magnitude', color='b')
+        self.ax.tick_params(axis='y', labelcolor='b')
+        self.ax.set_title('Fourier Transform Results')
+        self.ax.grid(True, alpha=0.3)
+        
+        self.canvas.draw()
+
+    def compute_correlation(self):
+        """Compute cross-correlation between two selected signals"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 2:
+            messagebox.showwarning("Warning", "Please select exactly two signals for correlation")
+            return
+        
+        try:
+            signal1 = selected_signals[0]
+            signal2 = selected_signals[1]
+            
+            from dsp_signal.correlation import correlate_signals
+            correlation_signal = correlate_signals(signal1, signal2)
+            
+            self.result_signal = correlation_signal
+            self.plot_result()
+            
+            # Find correlation peak
+            from dsp_signal.correlation import find_correlation_peak
+            correlation_dict = correlation_signal.to_dict()
+            peak_lag, peak_value = find_correlation_peak(correlation_dict)
+            
+            messagebox.showinfo("Success", 
+                              f"Correlation computed successfully!\n"
+                              f"Peak at lag {peak_lag} samples\n"
+                              f"Peak value: {peak_value:.6f}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Correlation failed: {str(e)}")
+
+    def compute_autocorrelation(self):
+        """Compute autocorrelation of selected signal"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 1:
+            messagebox.showwarning("Warning", "Please select exactly one signal for autocorrelation")
+            return
+        
+        try:
+            signal = selected_signals[0]
+            
+            from dsp_signal.correlation import autocorrelate_signal
+            autocorr_signal = autocorrelate_signal(signal)
+            
+            self.result_signal = autocorr_signal
+            self.plot_result()
+            
+            messagebox.showinfo("Success", "Autocorrelation computed successfully!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Autocorrelation failed: {str(e)}")
+
+    def estimate_time_delay(self):
+        """Estimate time delay between two signals"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 2:
+            messagebox.showwarning("Warning", "Please select exactly two signals for delay estimation")
+            return
+        
+        try:
+            fs = float(self.fs_delay_entry.get())
+            if fs <= 0:
+                raise ValueError("Sampling frequency must be positive")
+            
+            signal1 = selected_signals[0]
+            signal2 = selected_signals[1]
+            
+            from dsp_signal.correlation import estimate_time_delay
+            lag_samples, delay_seconds, correlation_dict = estimate_time_delay(
+                signal1.to_dict(),
+                signal2.to_dict(),
+                fs
+            )
+            
+            # Create correlation signal for plotting
+            correlation_signal = Signal(
+                indices=list(correlation_dict.keys()),
+                samples=list(correlation_dict.values()),
+                name=f"Correlation_{signal1.name}_{signal2.name}"
+            )
+            
+            self.result_signal = correlation_signal
+            self.plot_result()
+            
+            # Show results
+            result_text = (f"Time Delay Estimation:\n"
+                          f"Sampling Frequency: {fs} Hz\n"
+                          f"Lag: {lag_samples} samples\n"
+                          f"Delay: {delay_seconds:.6f} seconds\n"
+                          f"Delay: {delay_seconds*1000:.3f} ms")
+            
+            messagebox.showinfo("Delay Estimation", result_text)
+            
+        except ValueError as ve:
+            messagebox.showerror("Error", f"Invalid input: {str(ve)}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Delay estimation failed: {str(e)}")
+
+    def show_signal_statistics(self):
+        """Display statistics of selected signal"""
+        selected_signals = self.get_selected_signals()
+        if len(selected_signals) != 1:
+            messagebox.showwarning("Warning", "Please select exactly one signal")
+            return
+        
+        try:
+            signal = selected_signals[0]
+            
+            from dsp_signal.time_analysis import analyze_signal_statistics
+            stats = analyze_signal_statistics(signal.to_dict())
+            
+            if not stats:
+                messagebox.showinfo("Statistics", "No statistics available")
+                return
+            
+            # Format statistics
+            stats_text = f"Statistics for '{signal.name}':\n\n"
+            stats_text += f"Number of samples: {len(signal.samples)}\n"
+            stats_text += f"Mean: {stats.get('mean', 0):.6f}\n"
+            stats_text += f"Standard Deviation: {stats.get('std', 0):.6f}\n"
+            stats_text += f"Variance: {stats.get('variance', 0):.6f}\n"
+            stats_text += f"Minimum: {stats.get('min', 0):.6f}\n"
+            stats_text += f"Maximum: {stats.get('max', 0):.6f}\n"
+            stats_text += f"Range: {stats.get('range', 0):.6f}\n"
+            stats_text += f"Energy: {stats.get('energy', 0):.6f}\n"
+            stats_text += f"Power: {stats.get('power', 0):.6f}\n"
+            stats_text += f"RMS: {stats.get('rms', 0):.6f}"
+            
+            messagebox.showinfo("Signal Statistics", stats_text)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Statistics calculation failed: {str(e)}")
 
     def plot_selected(self):
         selected_signals = self.get_selected_signals()
@@ -619,6 +857,7 @@ class DSPApplication:
         self.clear_result()
         messagebox.showinfo("Info", "All signals cleared")
 
+<<<<<<< HEAD:dsp_signal_processing_tool.py
     #def open_generate_dialog(self, wave_type: str = 'sine'):
 
 
@@ -797,3 +1036,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+=======
+>>>>>>> 8c555482f0618e57c33e3c143a0cc7a7c721658e:gui/app.py

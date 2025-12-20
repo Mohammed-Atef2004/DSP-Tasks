@@ -129,6 +129,11 @@ class DSPApplication:
         ttk.Button(filter_frame, text="Design & Apply Filter", style='Filter.TButton', 
                 command=self.open_filter_dialog).pack(fill=tk.X)
         
+        ttk.Button(filter_frame, 
+           text="Verify with Test Case", 
+           style='Compare.TButton', 
+           command=self.test_filter_design).pack(fill=tk.X, pady=2)
+        
         # Comparison
         compare_frame = ttk.LabelFrame(control_frame, text="Signal Comparison", padding="6")
         compare_frame.pack(fill=tk.X, pady=(6, 8), padx=6)
@@ -670,6 +675,59 @@ class DSPApplication:
             for i, h in zip(filter_sig.indices, filter_sig.samples):
                 f.write(f"Index {i}: {h}\n")
         print("Coefficients saved to filter_coefficients.txt")
+
+    def test_filter_design(self):
+        """
+        Tests the FIR filter design by comparing generated h(n) 
+        with the faculty's LPFCoefficients.txt.
+        """
+        # 1. Ask for the Faculty Coefficient File (Expected Output)
+        expected_file = filedialog.askopenfilename(title="Select Faculty Coefficient File (e.g., LPFCoefficients.txt)")
+        if not expected_file: return
+
+        # 2. Ask for the Specification File (Input)
+        spec_file = filedialog.askopenfilename(title="Select Filter Specifications File")
+        if not spec_file: return
+
+        try:
+            # Parse Specifications from file
+            specs = {}
+            with open(spec_file, 'r') as f:
+                for line in f:
+                    if '=' in line:
+                        key, val = line.split('=')
+                        specs[key.strip().lower()] = val.strip()
+
+            # Extract values with better safety
+            fs = float(specs.get('fs', 8000))
+            attenuation = float(specs.get('stopbandattenuation', 50))
+            transband = float(specs.get('transitionband', 500))
+            
+            # Use .get() but check for both lowercase and uppercase variations
+            fc = float(specs.get('fc', 0))
+            f1 = float(specs.get('f1', 0))
+            f2 = float(specs.get('f2', 0))
+
+            # Clean the filter type string (e.g., "Band pass" -> "bandpass")
+            ftype = specs.get('filtertype', '').lower().replace(' ', '')
+
+            # 3. Design the filter using your logic
+            from dsp_signal.Filters import design_fir_filter
+            your_filter = design_fir_filter(
+                filter_type=ftype,
+                fs=fs,
+                fc=fc, f1=f1, f2=f2,
+                attenuation=attenuation,
+                transband=transband
+            )
+
+            from utils.comparison import Compare_filters
+            Compare_filters(expected_file, your_filter.indices, your_filter.samples)
+            
+            messagebox.showinfo("Test case passed successfully")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Testing failed: {str(e)}")
 
     def plot_selected(self):
         selected_signals = self.get_selected_signals()

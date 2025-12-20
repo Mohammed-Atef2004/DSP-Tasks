@@ -68,8 +68,8 @@ def design_fir_filter(filter_type, fs, fc=None, f1=None, f2=None, attenuation=44
             if n == 0:
                 hd = 2 * (f2_norm - f1_norm)
             else:
-                term2 = 2 * f2_norm * (math.sin(n * 2 * math.pi * f2_norm) / (n * 2 * math.pi * f2_norm))
-                term1 = 2 * f1_norm * (math.sin(n * 2 * math.pi * f1_norm) / (n * 2 * math.pi * f1_norm))
+                term2 = 2 * f2_norm * (np.sin(2 * np.pi * f2_norm * n) / (2 * np.pi * f2_norm * n))
+                term1 = 2 * f1_norm * (np.sin(2 * np.pi * f1_norm * n) / (2 * np.pi * f1_norm * n))
                 hd = term2 - term1
 
         elif filter_type.lower() == 'bandstop':
@@ -78,8 +78,8 @@ def design_fir_filter(filter_type, fs, fc=None, f1=None, f2=None, attenuation=44
             if n == 0:
                 hd = 1 - 2 * (f2_norm - f1_norm)
             else:
-                term1 = 2 * f1_norm * (math.sin(n * 2 * math.pi * f1_norm) / (n * 2 * math.pi * f1_norm))
-                term2 = 2 * f2_norm * (math.sin(n * 2 * math.pi * f2_norm) / (n * 2 * math.pi * f2_norm))
+                term1 = 2 * f1_norm * (np.sin(2 * np.pi * f1_norm * n) / (2 * np.pi * f1_norm * n))
+                term2 = 2 * f2_norm * (np.sin(2 * np.pi * f2_norm * n) / (2 * np.pi * f2_norm * n))
                 hd = term1 - term2
         
         h_coeffs.append(hd * w)
